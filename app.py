@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import os
 import json
+import time
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
@@ -73,11 +74,52 @@ def load_metrics_from_file():
     st.markdown(full_css, unsafe_allow_html=True)
 
 class FredAPI:
-    """Class to handle FRED API interactions"""
+    """Class to handle FRED API interactions with rate limiting"""
     
     def __init__(self, api_key):
         self.api_key = api_key
         self.base_url = "https://api.stlouisfed.org/fred"
+        self.last_request_time = 0
+        self.min_request_interval = 0.1  # 100ms between requests
+    
+    def _wait_for_rate_limit(self):
+        """Ensure we don't exceed rate limits"""
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        if time_since_last < self.min_request_interval:
+            time.sleep(self.min_request_interval - time_since_last)
+        self.last_request_time = time.time()
+    
+    def _make_request_with_retry(self, url, params, max_retries=3):
+        """Make API request with retry logic for rate limiting"""
+        for attempt in range(max_retries):
+            try:
+                self._wait_for_rate_limit()
+                response = requests.get(url, params=params)
+                
+                if response.status_code == 429:  # Too Many Requests
+                    if attempt < max_retries - 1:
+                        wait_time = (2 ** attempt) * 1  # Exponential backoff: 1s, 2s, 4s
+                        st.warning(f"Rate limit hit. Waiting {wait_time} seconds before retry...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        st.error("Rate limit exceeded. Please wait a few minutes before trying again.")
+                        return None
+                
+                response.raise_for_status()
+                return response
+                
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    st.warning(f"Request failed (attempt {attempt + 1}), retrying...")
+                    time.sleep(1)
+                    continue
+                else:
+                    st.error(f"Error after {max_retries} attempts: {e}")
+                    return None
+        
+        return None
     
     def get_series_data(self, series_id, start_date=None, end_date=None):
         """
@@ -105,8 +147,9 @@ class FredAPI:
             params['observation_end'] = end_date
             
         try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
+            response = self._make_request_with_retry(url, params)
+            if response is None:
+                return pd.DataFrame()
             
             data = response.json()
             
@@ -130,9 +173,6 @@ class FredAPI:
             else:
                 return pd.DataFrame()
                 
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching data: {e}")
-            return pd.DataFrame()
         except Exception as e:
             st.error(f"Error processing data: {e}")
             return pd.DataFrame()
@@ -156,8 +196,9 @@ class FredAPI:
         }
         
         try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
+            response = self._make_request_with_retry(url, params)
+            if response is None:
+                return {}
             
             data = response.json()
             
@@ -166,9 +207,6 @@ class FredAPI:
             else:
                 return {}
                 
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching series info: {e}")
-            return {}
         except Exception as e:
             st.error(f"Error processing series info: {e}")
             return {}
