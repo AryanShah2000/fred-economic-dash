@@ -80,7 +80,7 @@ class FredAPI:
         self.api_key = api_key
         self.base_url = "https://api.stlouisfed.org/fred"
         self.last_request_time = 0
-        self.min_request_interval = 0.1  # 100ms between requests
+        self.min_request_interval = 0.5  # 500ms between requests (more conservative)
     
     def _wait_for_rate_limit(self):
         """Ensure we don't exceed rate limits"""
@@ -860,108 +860,128 @@ def main():
                         # Toggle for percentage vs absolute changes
                         use_percentage = st.checkbox("Show percentage changes", value=True, help="Toggle between percentage and absolute changes")
                         
-                        # Create summary data
-                        summary_data = []
-                        
-                        for metric in st.session_state.saved_metrics:
-                            try:
-                                # Get metric data
-                                metric_df = fred_api.get_series_data(metric)
-                                metric_info = fred_api.get_series_info(metric)
+                        # Add a button to load summary data
+                        if st.button("🔄 Load Summary Data", help="Click to load data for all saved metrics"):
+                            # Create summary data with progress tracking
+                            summary_data = []
+                            total_metrics = len(st.session_state.saved_metrics)
+                            
+                            # Create a progress bar
+                            progress_bar = st.progress(0)
+                            status_text = st.empty()
+                            
+                            for i, metric in enumerate(st.session_state.saved_metrics):
+                                # Update progress
+                                progress = (i + 1) / total_metrics
+                                progress_bar.progress(progress)
+                                status_text.text(f"Loading metric {i + 1} of {total_metrics}: {metric}")
                                 
-                                if not metric_df.empty and len(metric_df) >= 2:
-                                    # Get metric name
-                                    metric_name = st.session_state.saved_metrics_names.get(metric, metric)
+                                try:
+                                    # Get metric data
+                                    metric_df = fred_api.get_series_data(metric)
+                                    metric_info = fred_api.get_series_info(metric)
                                     
-                                    # Get frequency and units
-                                    frequency = metric_info.get('frequency', 'N/A')
-                                    units = metric_info.get('units', 'N/A')
-                                    
-                                    # Sort by date to ensure proper ordering
-                                    metric_df = metric_df.sort_values('date')
-                                    
-                                    # Get current value and latest date
-                                    latest_value = metric_df.iloc[-1]['value']
-                                    latest_date = metric_df.iloc[-1]['date'].strftime('%Y-%m-%d')
-                                    
-                                    # Sequential change (latest vs previous)
-                                    previous_value = metric_df.iloc[-2]['value']
-                                    
-                                    if use_percentage and previous_value != 0:
-                                        sequential_change = ((latest_value - previous_value) / previous_value) * 100
-                                        sequential_format = f"{sequential_change:.2f}%"
-                                    else:
-                                        sequential_change = latest_value - previous_value
-                                        sequential_format = f"{sequential_change:.2f}"
-                                    
-                                    # YTD change (latest vs earliest this year)
-                                    current_year = datetime.now().year
-                                    ytd_start = datetime(current_year, 1, 1)
-                                    
-                                    # Find closest reading to Jan 1st or after
-                                    ytd_df = metric_df[metric_df['date'] >= ytd_start]
-                                    if not ytd_df.empty:
-                                        ytd_start_value = ytd_df.iloc[0]['value']
+                                    if not metric_df.empty and len(metric_df) >= 2:
+                                        # Get metric name
+                                        metric_name = st.session_state.saved_metrics_names.get(metric, metric)
                                         
-                                        if use_percentage and ytd_start_value != 0:
-                                            ytd_change = ((latest_value - ytd_start_value) / ytd_start_value) * 100
-                                            ytd_format = f"{ytd_change:.2f}%"
-                                        else:
-                                            ytd_change = latest_value - ytd_start_value
-                                            ytd_format = f"{ytd_change:.2f}"
-                                    else:
-                                        ytd_format = "N/A"
-                                    
-                                    summary_data.append({
-                                        'Metric Name': metric_name,
-                                        'Current Value': f"{latest_value:.2f}",
-                                        'Latest Date': latest_date,
-                                        'Units': units,
-                                        'Frequency': frequency,
-                                        'Sequential Change': sequential_format,
-                                        'YTD Change': ytd_format
-                                    })
-                                else:
-                                    # Handle case with insufficient data
-                                    metric_name = st.session_state.saved_metrics_names.get(metric, metric)
-                                    frequency = metric_info.get('frequency', 'N/A') if metric_info else 'N/A'
-                                    units = metric_info.get('units', 'N/A') if metric_info else 'N/A'
-                                    
-                                    # Try to get at least the current value if we have any data
-                                    if not metric_df.empty:
+                                        # Get frequency and units
+                                        frequency = metric_info.get('frequency', 'N/A')
+                                        units = metric_info.get('units', 'N/A')
+                                        
+                                        # Sort by date to ensure proper ordering
+                                        metric_df = metric_df.sort_values('date')
+                                        
+                                        # Get current value and latest date
                                         latest_value = metric_df.iloc[-1]['value']
                                         latest_date = metric_df.iloc[-1]['date'].strftime('%Y-%m-%d')
-                                        current_value = f"{latest_value:.2f}"
+                                        
+                                        # Sequential change (latest vs previous)
+                                        previous_value = metric_df.iloc[-2]['value']
+                                        
+                                        if use_percentage and previous_value != 0:
+                                            sequential_change = ((latest_value - previous_value) / previous_value) * 100
+                                            sequential_format = f"{sequential_change:.2f}%"
+                                        else:
+                                            sequential_change = latest_value - previous_value
+                                            sequential_format = f"{sequential_change:.2f}"
+                                        
+                                        # YTD change (latest vs earliest this year)
+                                        current_year = datetime.now().year
+                                        ytd_start = datetime(current_year, 1, 1)
+                                        
+                                        # Find closest reading to Jan 1st or after
+                                        ytd_df = metric_df[metric_df['date'] >= ytd_start]
+                                        if not ytd_df.empty:
+                                            ytd_start_value = ytd_df.iloc[0]['value']
+                                            
+                                            if use_percentage and ytd_start_value != 0:
+                                                ytd_change = ((latest_value - ytd_start_value) / ytd_start_value) * 100
+                                                ytd_format = f"{ytd_change:.2f}%"
+                                            else:
+                                                ytd_change = latest_value - ytd_start_value
+                                                ytd_format = f"{ytd_change:.2f}"
+                                        else:
+                                            ytd_format = "N/A"
+                                        
+                                        summary_data.append({
+                                            'Metric Name': metric_name,
+                                            'Current Value': f"{latest_value:.2f}",
+                                            'Latest Date': latest_date,
+                                            'Units': units,
+                                            'Frequency': frequency,
+                                            'Sequential Change': sequential_format,
+                                            'YTD Change': ytd_format
+                                        })
                                     else:
-                                        current_value = 'N/A'
-                                        latest_date = 'N/A'
-                                    
+                                        # Handle case with insufficient data
+                                        metric_name = st.session_state.saved_metrics_names.get(metric, metric)
+                                        frequency = metric_info.get('frequency', 'N/A') if metric_info else 'N/A'
+                                        units = metric_info.get('units', 'N/A') if metric_info else 'N/A'
+                                        
+                                        # Try to get at least the current value if we have any data
+                                        if not metric_df.empty:
+                                            latest_value = metric_df.iloc[-1]['value']
+                                            latest_date = metric_df.iloc[-1]['date'].strftime('%Y-%m-%d')
+                                            current_value = f"{latest_value:.2f}"
+                                        else:
+                                            current_value = 'N/A'
+                                            latest_date = 'N/A'
+                                        
+                                        summary_data.append({
+                                            'Metric Name': metric_name,
+                                            'Current Value': current_value,
+                                            'Latest Date': latest_date,
+                                            'Units': units,
+                                            'Frequency': frequency,
+                                            'Sequential Change': 'N/A',
+                                            'YTD Change': 'N/A'
+                                        })
+                                        
+                                except Exception as e:
+                                    # Handle any errors gracefully
+                                    metric_name = st.session_state.saved_metrics_names.get(metric, metric)
                                     summary_data.append({
                                         'Metric Name': metric_name,
-                                        'Current Value': current_value,
-                                        'Latest Date': latest_date,
-                                        'Units': units,
-                                        'Frequency': frequency,
-                                        'Sequential Change': 'N/A',
-                                        'YTD Change': 'N/A'
+                                        'Current Value': 'Error',
+                                        'Latest Date': 'Error',
+                                        'Units': 'Error',
+                                        'Frequency': 'Error',
+                                        'Sequential Change': 'Error',
+                                        'YTD Change': 'Error'
                                     })
-                                    
-                            except Exception as e:
-                                # Handle any errors gracefully
-                                metric_name = st.session_state.saved_metrics_names.get(metric, metric)
-                                summary_data.append({
-                                    'Metric Name': metric_name,
-                                    'Current Value': 'Error',
-                                    'Latest Date': 'Error',
-                                    'Units': 'Error',
-                                    'Frequency': 'Error',
-                                    'Sequential Change': 'Error',
-                                    'YTD Change': 'Error'
-                                })
+                            
+                            # Clear progress indicators
+                            progress_bar.empty()
+                            status_text.empty()
+                            
+                            # Store summary data in session state
+                            st.session_state.summary_data = summary_data
+                            st.success(f"✅ Loaded data for {len(summary_data)} metrics!")
                         
-                        if summary_data:
-                            # Display summary table
-                            summary_df = pd.DataFrame(summary_data)
+                        # Display summary table if data exists
+                        if hasattr(st.session_state, 'summary_data') and st.session_state.summary_data:
+                            summary_df = pd.DataFrame(st.session_state.summary_data)
                             st.dataframe(
                                 summary_df,
                                 width='stretch',
