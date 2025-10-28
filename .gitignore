@@ -16,7 +16,6 @@ env/
 .streamlit/
 
 # Data files (optional - you might want to include saved_metrics.json)
-saved_metrics.json
 theme_settings.json
 
 # IDE
