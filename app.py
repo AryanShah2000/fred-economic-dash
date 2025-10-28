@@ -434,11 +434,6 @@ def main():
         # Initialize edit mode state
         if 'edit_mode' not in st.session_state:
             st.session_state.edit_mode = False
-        
-        # Pencil button with emoji inside
-        if st.button("✏️", key="edit_toggle", help="Toggle edit mode"):
-            st.session_state.edit_mode = not st.session_state.edit_mode
-            st.rerun()
     
     edit_mode = st.session_state.edit_mode
     
@@ -458,9 +453,18 @@ def main():
     if 'saved_metrics_groups' not in st.session_state:
         st.session_state.saved_metrics_groups = {}
     
-    # Add new metric button
-    if st.sidebar.button("➕ Add New Metric"):
-        st.session_state.show_add_metric = True
+    # Buttons row - Add New Metric and Edit toggle
+    col1, col2 = st.sidebar.columns([3, 1])
+    
+    with col1:
+        if st.button("➕ Add New Metric"):
+            st.session_state.show_add_metric = True
+    
+    with col2:
+        # Pencil button with emoji inside
+        if st.button("✏️", key="edit_toggle", help="Toggle edit mode"):
+            st.session_state.edit_mode = not st.session_state.edit_mode
+            st.rerun()
     
     # Modal-like popup for adding new metric
     if 'show_add_metric' in st.session_state and st.session_state.show_add_metric:
@@ -634,7 +638,7 @@ def main():
                 col1, col2, col3 = st.columns([1, 1, 2])
                 with col1:
                     enable_drawing = st.checkbox("✏️ Enable Drawing Mode", help="Check to draw trendlines on the chart")
-                    light_mode_chart = st.checkbox("☀️ Light Mode Chart", help="Toggle light mode for the chart only")
+                    light_mode_chart = st.checkbox("☀️ Light Mode Chart (for screenshots)", help="Toggle light mode for the chart only")
                 with col2:
                     # Show format line button only when drawing mode is enabled
                     if enable_drawing:
@@ -679,6 +683,7 @@ def main():
                     y=df['value'],
                     mode='lines+markers',
                     name='Data',
+                    showlegend=False,  # Hide legend
                     line=dict(color=st.session_state.get('data_line_color', '#1f77b4'), width=2),
                     marker=dict(size=4, color=st.session_state.get('data_line_color', '#1f77b4')),
                     hovertemplate='<b>Date:</b> %{x}<br><b>Value:</b> %{y:.2f}<extra></extra>'
@@ -924,8 +929,12 @@ def main():
                                         else:
                                             ytd_format = "N/A"
                                         
+                                        # Get group name
+                                        group_name = st.session_state.saved_metrics_groups.get(metric, 'Ungrouped')
+                                        
                                         summary_data.append({
                                             'Metric Name': metric_name,
+                                            'Group': group_name,
                                             'Current Value': f"{latest_value:.2f}",
                                             'Latest Date': latest_date,
                                             'Units': units,
@@ -948,8 +957,12 @@ def main():
                                             current_value = 'N/A'
                                             latest_date = 'N/A'
                                         
+                                        # Get group name
+                                        group_name = st.session_state.saved_metrics_groups.get(metric, 'Ungrouped')
+                                        
                                         summary_data.append({
                                             'Metric Name': metric_name,
+                                            'Group': group_name,
                                             'Current Value': current_value,
                                             'Latest Date': latest_date,
                                             'Units': units,
@@ -961,8 +974,11 @@ def main():
                                 except Exception as e:
                                     # Handle any errors gracefully
                                     metric_name = st.session_state.saved_metrics_names.get(metric, metric)
+                                    group_name = st.session_state.saved_metrics_groups.get(metric, 'Ungrouped')
+                                    
                                     summary_data.append({
                                         'Metric Name': metric_name,
+                                        'Group': group_name,
                                         'Current Value': 'Error',
                                         'Latest Date': 'Error',
                                         'Units': 'Error',
