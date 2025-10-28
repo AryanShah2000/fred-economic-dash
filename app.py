@@ -261,15 +261,26 @@ def main():
     st.markdown("Fetch and explore economic data from the Federal Reserve Economic Data (FRED) database.")
     
     # Check for API key
-    api_key = os.getenv('FRED_API_KEY')
+    api_key = None
+    
+    # Try Streamlit secrets first (for deployment)
+    try:
+        api_key = st.secrets["FRED_API_KEY"]
+    except:
+        # Fall back to environment variable (for local development)
+        api_key = os.getenv('FRED_API_KEY')
     
     if not api_key or api_key == 'your_fred_api_key_here':
-        st.error("⚠️ Please set your FRED API key in the .env file")
+        st.error("⚠️ Please set your FRED API key")
         st.markdown("""
-        To get started:
+        **For local development:**
         1. Get a free API key from [FRED](https://research.stlouisfed.org/docs/api/api_key.html)
         2. Add it to the `.env` file: `FRED_API_KEY=your_actual_key_here`
         3. Restart the application
+        
+        **For Streamlit Cloud:**
+        1. Add your API key in the app's Secrets management
+        2. Format: `FRED_API_KEY = "your_actual_key_here"`
         """)
         return
     
