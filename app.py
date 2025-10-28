@@ -385,6 +385,9 @@ def main():
     else:
         fetch_data_requested = False
     
+    # Horizontal separator line
+    st.sidebar.markdown("---")
+    
     # Saved Metrics section with inline pencil
     col1, col2 = st.sidebar.columns([4, 1])
     with col1:
